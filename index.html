@@ -127,6 +127,23 @@
   .pcell.tfinde{background:#163a33; color:#5eead4;}
   .pcell.tfolga .pnum{opacity:.45;}
   .pcell.today{outline:2px solid var(--accent); outline-offset:1px;}
+  /* meta boxes (semana / mês) */
+  .metabox{background:var(--card); border-radius:16px; padding:14px 16px; margin-top:10px;}
+  .metatitle{font-size:13px; font-weight:700; margin-bottom:10px;}
+  .mrow{display:flex; align-items:center; gap:9px; margin:8px 0; font-size:13px;}
+  .memo{width:20px; text-align:center; flex:none;}
+  .mname{flex:none; width:86px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--txt);}
+  .mbar{flex:1; height:7px; border-radius:5px; background:var(--card2); overflow:hidden;}
+  .mbar i{display:block; height:100%; background:var(--green); border-radius:5px;}
+  .mval{flex:none; width:40px; text-align:right; color:var(--muted); font-variant-numeric:tabular-nums;}
+  .mval.hit{color:var(--green); font-weight:700;}
+  /* insights */
+  .ins-head{font-size:14px; font-weight:700; margin-bottom:6px;}
+  .insub{font-size:13px; color:var(--txt); line-height:1.5; margin-bottom:10px;}
+  .insub b{font-weight:700;}
+  .insrow{display:flex; justify-content:space-between; padding:7px 2px; font-size:14px; border-bottom:1px solid var(--line);}
+  .insrow:last-child{border-bottom:none;}
+  .insfoot{font-size:11px; color:var(--faint); margin-top:8px;}
   /* tab bar */
   .tabbar{position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:560px;
     display:flex; background:rgba(20,22,28,.92); backdrop-filter:blur(12px); border-top:1px solid var(--line);
@@ -158,7 +175,7 @@ const TYPE_ORDER = ['p12','folga','finde','p36'];
 
 const HABITS = [
   {id:'acordar', name:'Acordar cedo', emo:'⏰', cat:'Sono', rules:{
-     folga:{s:'full'}, p12:{s:'full'}, finde:{s:'bonus',n:'opcional'}, p36:{s:'exempt'}}},
+     folga:{s:'full'}, p12:{s:'full'}, finde:{s:'bonus',n:'opcional'}, p36:{s:'full'}}},
   {id:'along',   name:'Alongamento', emo:'🤸', rules:{
      folga:{s:'full',n:'5 min'}, p12:{s:'full',n:'5 min'}, finde:{s:'full',n:'5 min'}, p36:{s:'full',n:'5 min'}}},
   {id:'medit',   name:'Meditação', emo:'🧘', rules:{
@@ -167,16 +184,16 @@ const HABITS = [
      folga:{s:'full',n:'nutritivo em casa'}, p12:{s:'full',n:'arrumar e levar'}, finde:{s:'full',n:'levar comida'}, p36:{s:'exempt'}}},
   {id:'academia',name:'Academia', emo:'🏋️', weekly:3, rules:{
      folga:{s:'full',n:'dia nobre'}, p12:{s:'bonus',n:'se sobrar energia'}, finde:{s:'bonus',n:'se sobrar energia'}, p36:{s:'exempt'}}},
-  {id:'aerobico',name:'Aeróbico / bike', emo:'🚲', weekly:3, rules:{
+  {id:'aerobico',name:'Cardio / Bike', emo:'🚲', weekly:3, rules:{
      folga:{s:'bonus',n:'caminhada'}, p12:{s:'full',n:'ir de bike'}, finde:{s:'bonus',n:'caminhada/bike'}, p36:{s:'exempt'}}},
   {id:'estudar', name:'Estudar', emo:'📚', rules:{
      folga:{s:'full',n:'2 horas'}, p12:{s:'full',n:'30 min'}, finde:{s:'full',n:'30 min'}, p36:{s:'full',n:'30 min'}}},
-  {id:'cigarro', name:'Cigarro', emo:'🚭', kind:'cig', rules:{
+  {id:'cigarro', name:'Breath in', emo:'🍃', kind:'cig', rules:{
      folga:{s:'full'}, p12:{s:'full'}, finde:{s:'full'}, p36:{s:'full'}}},
   {id:'leitura', name:'Leitura (não-médica)', emo:'📖', rules:{
      folga:{s:'full',n:'15 min'}, p12:{s:'bonus',n:'opcional'}, finde:{s:'bonus',n:'opcional'}, p36:{s:'bonus',n:'opcional'}}},
   {id:'dormir',  name:'Dormir cedo', emo:'😴', cat:'Sono', rules:{
-     folga:{s:'full'}, p12:{s:'full'}, finde:{s:'bonus',n:'opcional'}, p36:{s:'exempt'}}},
+     folga:{s:'full'}, p12:{s:'full'}, finde:{s:'bonus',n:'opcional'}, p36:{s:'full'}}},
 ];
 
 /* ============================================================ */
@@ -218,11 +235,31 @@ function checksOf(s){const r=data.days[s]; return (r&&r.checks)||{};}
 function weekDates(s){const dow=(parse(s).getDay()+6)%7; const mon=shift(s,-dow); return Array.from({length:7},(_,i)=>shift(mon,i));}
 function weeklyCount(s,hid){return weekDates(s).filter(ds=>checksOf(ds)[hid]===true).length;}
 
-function essentialsOf(type){return HABITS.filter(h=>['full','reduced'].includes(h.rules[type].s));}
+function statusFor(h,ds){
+  if(h.id==='dormir' && shiftOf(ds)==='noturno') return 'na';            // trabalha à noite → não dá pra dormir cedo
+  if(h.id==='acordar' && shiftOf(shift(ds,-1))==='noturno') return 'na'; // noite anterior no hospital → acorda fora do controle
+  return h.rules[typeOf(ds)].s;
+}
+function essentialsOf(ds){return HABITS.filter(h=>['full','reduced'].includes(statusFor(h,ds)));}
 function isMet(h,checks){ if(h.kind==='cig'){const v=checks[h.id]; return v && v!=='many';} return checks[h.id]===true; }
-function dayScore(s){const type=typeOf(s); const checks=checksOf(s); const ess=essentialsOf(type);
+function dayScore(s){const checks=checksOf(s); const ess=essentialsOf(s);
   const met=ess.filter(h=>isMet(h,checks)).length; return {met,total:ess.length};}
 function dayComplete(s){const sc=dayScore(s); return sc.total>0 && sc.met===sc.total;}
+function monthDates(s){const d=parse(s); const y=d.getFullYear(),m=d.getMonth(); const dim=new Date(y,m+1,0).getDate(); const out=[]; for(let i=1;i<=dim;i++) out.push(toStr(new Date(y,m,i))); return out;}
+function metaBox(title, dates, monthWeeks){
+  let rows='';
+  HABITS.forEach(h=>{
+    let done=0, target=0;
+    if(h.weekly){ target = monthWeeks ? h.weekly*monthWeeks : h.weekly; done = dates.filter(ds=>checksOf(ds)[h.id]===true).length; }
+    else { dates.forEach(ds=>{const s=statusFor(h,ds); if(s==='full'||s==='reduced'){ target++; if(isMet(h,checksOf(ds))) done++; }}); }
+    if(target===0) return;
+    const pct=Math.min(100, done/target*100); const hit=done>=target;
+    rows+='<div class="mrow"><span class="memo">'+h.emo+'</span><span class="mname">'+h.name+'</span>'+
+      '<div class="mbar"><i style="width:'+pct+'%"></i></div>'+
+      '<span class="mval'+(hit?' hit':'')+'">'+done+'/'+target+'</span></div>';
+  });
+  return '<div class="metabox"><div class="metatitle">'+title+'</div>'+rows+'</div>';
+}
 
 /* ---------- TODAY ---------- */
 function renderToday(){
@@ -249,12 +286,15 @@ function renderToday(){
      (done?'Mandou bem. Recompensa merecida.':'Cada check é uma vitória registrada.')+'</div></div></div>';
 
   const ess=[],bonus=[],exempt=[];
-  HABITS.forEach(hh=>{const s=hh.rules[type].s; if(s==='na')return; if(s==='exempt')exempt.push(hh); else if(s==='bonus')bonus.push(hh); else ess.push(hh);});
+  HABITS.forEach(hh=>{const s=statusFor(hh,view); if(s==='na')return; if(s==='exempt')exempt.push(hh); else if(s==='bonus')bonus.push(hh); else ess.push(hh);});
   h+='<div id="list">'+groupHTML('Hoje',ess,type,checks)+
      (bonus.length?groupHTML('Bônus (não conta como falha)',bonus,type,checks):'')+
      (exempt.length?groupHTML('Isento hoje — bônus se você conseguir',exempt,type,checks):'')+
      '</div>';
-  h+='<div class="hint">O check é a sua recompensa do dia. Dias 🚫 isentos contam como vitória — o sistema te protege no plantão.</div>';
+  h+=metaBox('📊 Meta da semana', weekDates(view), null);
+  const _md=parse(view), _dim=new Date(_md.getFullYear(),_md.getMonth()+1,0).getDate();
+  h+=metaBox('📅 Meta do mês — '+MOF[_md.getMonth()], monthDates(view), Math.max(1,Math.round(_dim/7)));
+  h+='<div class="hint">O check é a sua recompensa do dia. Dias 🚫 isentos contam como vitória — o sistema te protege no plantão.<br>As metas abaixo se ajustam sozinhas conforme você atualiza os plantões.</div>';
   document.getElementById('content').innerHTML=h;
 
   // bind
@@ -275,7 +315,7 @@ function groupHTML(label,habits,type,checks){
         '</div><div class="hnote">menos é melhor — zero é vitória máxima</div></div></div><div class="cig-opts">'+
         opts.map(o=>'<button class="cig-opt '+o[3]+(v===o[0]?' on':'')+'" data-v="'+o[0]+'"><span class="ce">'+o[1]+'</span>'+o[2]+'</button>').join('')+'</div></div>';
       return;}
-    const s=h.rules[type].s; const isB=(s==='bonus'||s==='exempt'); const done=checks[h.id]===true;
+    const s=statusFor(h,view); const isB=(s==='bonus'||s==='exempt'); const done=checks[h.id]===true;
     const ntxt=s==='exempt'?'isento — marque se conseguir (bônus)':h.rules[type].n;
     const note=ntxt?'<div class="hnote">'+ntxt+'</div>':'';
     const wk=h.weekly?'<div class="wk">'+weeklyCount(view,h.id)+'/'+h.weekly+' esta semana</div>':'';
@@ -287,7 +327,7 @@ function groupHTML(label,habits,type,checks){
 
 /* ---------- helpers for matrix/cal cells ---------- */
 function cellInfo(ds,h){
-  const type=typeOf(ds); const s=h.rules[type].s; const checks=checksOf(ds); const future=ds>todayStr();
+  const s=statusFor(h,ds); const checks=checksOf(ds); const future=ds>todayStr();
   if(h.kind==='cig'){const v=checks[h.id]; const map={none:['g','🟢'],few:['y','🟡'],many:['r','🔴']};
     if(v&&map[v]) return {cls:map[v][0],txt:map[v][1]}; return {cls:future?'na fut':'miss',txt:future?'':'·'};}
   if(s==='na') return {cls:'na',txt:''};
@@ -413,10 +453,81 @@ function renderPlantoes(){
   });
 }
 
+/* ---------- INSIGHTS (leitura dos próprios dados) ---------- */
+function lastNDates(n){const out=[]; for(let i=n-1;i>=0;i--) out.push(shift(todayStr(),-i)); return out;}
+function logged(ds){const c=checksOf(ds); return Object.values(c).some(v=> v===true || v==='none'||v==='few'||v==='many');}
+function bestStreak(){let best=0,cur=0; lastNDates(180).forEach(ds=>{const sc=dayScore(ds); if(sc.total===0)return; if(sc.met===sc.total){cur++; if(cur>best)best=cur;} else cur=0;}); return best;}
+function pc(x){return Math.round(x*100);}
+
+function renderInsights(){
+  const W=30; const win=lastNDates(W); const lg=win.filter(logged);
+  let h='<div class="navbar"><div class="nlabel" style="flex:1"><div class="d1">Insights</div><div class="d2">últimos '+W+' dias</div></div></div>';
+
+  if(lg.length<4){
+    h+='<div class="metabox"><div class="ins-head">Ainda juntando dados 🌱</div>'+
+      '<div class="insub">Você registrou <b>'+lg.length+' dia(s)</b>. A partir de ~4-5 dias eu começo a te mostrar padrões reais — o que mais escapa, onde você rende mais, e os gatilhos do Breath in. Continua marcando que a leitura aparece sozinha aqui.</div></div>';
+    document.getElementById('content').innerHTML=h; return;
+  }
+
+  h+='<div class="metabox"><div class="insrow"><span>Dias registrados</span><b>'+lg.length+' de '+W+'</b></div>'+
+     '<div class="insrow"><span>Sequência atual</span><b>🔥 '+streak()+' dia(s)</b></div>'+
+     '<div class="insrow"><span>Recorde de sequência</span><b>'+bestStreak()+' dia(s)</b></div></div>';
+
+  // aderência por hábito
+  const adh=[];
+  HABITS.forEach(hb=>{const ess=lg.filter(ds=>['full','reduced'].includes(statusFor(hb,ds)));
+    if(ess.length>=3){const met=ess.filter(ds=>isMet(hb,checksOf(ds))).length; adh.push({hb,met,total:ess.length,pct:met/ess.length});}});
+  if(adh.length){
+    adh.sort((a,b)=>b.pct-a.pct); const top=adh[0], bot=adh[adh.length-1];
+    h+='<div class="metabox"><div class="ins-head">Aderência por hábito</div>';
+    if(adh.length>=2 && top.pct>bot.pct)
+      h+='<div class="insub">💪 Mais forte: <b>'+top.hb.name+'</b> ('+pc(top.pct)+'%, '+top.met+'/'+top.total+'). O que mais escapa: <b>'+bot.hb.name+'</b> ('+pc(bot.pct)+'%, '+bot.met+'/'+bot.total+').</div>';
+    adh.forEach(a=>{h+='<div class="mrow"><span class="memo">'+a.hb.emo+'</span><span class="mname">'+a.hb.name+'</span>'+
+      '<div class="mbar"><i style="width:'+pc(a.pct)+'%"></i></div><span class="mval">'+pc(a.pct)+'%</span></div>';});
+    h+='<div class="insfoot">% nos dias em que o item era essencial · mín. 3 dias por hábito</div></div>';
+  }
+
+  // desempenho por tipo de dia
+  const ts=[];
+  TYPE_ORDER.forEach(t=>{const ds=lg.filter(x=>typeOf(x)===t); if(ds.length>=3){const comp=ds.filter(dayComplete).length; ts.push({t,n:ds.length,rate:comp/ds.length});}});
+  if(ts.length>=2){
+    const srt=[...ts].sort((a,b)=>b.rate-a.rate); const best=srt[0], worst=srt[srt.length-1];
+    h+='<div class="metabox"><div class="ins-head">Onde você rende mais</div>';
+    if(best.rate>worst.rate)
+      h+='<div class="insub">📅 Você fecha o dia completo bem mais em <b>'+DAY_TYPES[best.t].label+'</b> ('+pc(best.rate)+'%) do que em <b>'+DAY_TYPES[worst.t].label+'</b> ('+pc(worst.rate)+'%).</div>';
+    ts.forEach(s=>{h+='<div class="mrow"><span class="mname" style="width:124px">'+DAY_TYPES[s.t].emoji+' '+DAY_TYPES[s.t].label+'</span><div class="mbar"><i style="width:'+pc(s.rate)+'%"></i></div><span class="mval">'+pc(s.rate)+'%</span></div>';});
+    h+='<div class="insfoot">dias completos por tipo · mín. 3 dias por categoria</div></div>';
+  }
+
+  // breath in por tipo
+  const cs=[];
+  TYPE_ORDER.forEach(t=>{const ds=lg.filter(x=>typeOf(x)===t && checksOf(x).cigarro); if(ds.length>=3){const g=ds.filter(x=>checksOf(x).cigarro==='none').length; cs.push({t,n:ds.length,green:g/ds.length});}});
+  if(cs.length){
+    h+='<div class="metabox"><div class="ins-head">🍃 Breath in — dias sem fumar</div>';
+    if(cs.length>=2){const srt=[...cs].sort((a,b)=>b.green-a.green); const hi=srt[0], lo=srt[srt.length-1];
+      if(hi.green>lo.green) h+='<div class="insub">Você fica <b>sem fumar</b> em '+pc(hi.green)+'% dos dias de <b>'+DAY_TYPES[hi.t].label+'</b>, mas só '+pc(lo.green)+'% em <b>'+DAY_TYPES[lo.t].label+'</b> — esse tipo de dia é seu gatilho.</div>';}
+    cs.forEach(s=>{h+='<div class="mrow"><span class="mname" style="width:124px">'+DAY_TYPES[s.t].emoji+' '+DAY_TYPES[s.t].label+'</span><div class="mbar"><i style="width:'+pc(s.green)+'%"></i></div><span class="mval">'+pc(s.green)+'%</span></div>';});
+    h+='<div class="insfoot">% de dias 🟢 (não fumei) entre os dias com Breath in registrado</div></div>';
+  }
+
+  // dia da semana
+  const full=['domingo','segunda','terça','quarta','quinta','sexta','sábado']; const dws=[];
+  for(let d=0;d<7;d++){const ds=lg.filter(x=>parse(x).getDay()===d); if(ds.length>=2){const comp=ds.filter(dayComplete).length; dws.push({d,n:ds.length,rate:comp/ds.length});}}
+  if(dws.length>=3){const srt=[...dws].sort((a,b)=>b.rate-a.rate); const b1=srt[0], w1=srt[srt.length-1];
+    if(b1.rate>w1.rate)
+      h+='<div class="metabox"><div class="ins-head">🗓️ Seu ritmo na semana</div>'+
+        '<div class="insub"><b>'+full[b1.d]+'</b> é seu dia mais forte ('+pc(b1.rate)+'% completo). <b>'+full[w1.d]+'</b> é o mais difícil ('+pc(w1.rate)+'%) — vale caprichar no plano dele.</div>'+
+        '<div class="insfoot">dias completos por dia da semana · mín. 2 de cada</div></div>';
+  }
+
+  h+='<div class="hint">Tudo aqui vem 100% dos seus próprios checks. Quanto mais dias você registra, mais afiada fica a leitura — e cada número mostra a amostra em que se baseia.</div>';
+  document.getElementById('content').innerHTML=h;
+}
+
 /* ---------- shell ---------- */
 function byId(i){return document.getElementById(i);}
 function renderTabs(){
-  const tabs=[['today','📋','Hoje'],['semana','📊','Semana'],['mes','📅','Mês'],['plantoes','🩺','Plantões']];
+  const tabs=[['today','📋','Hoje'],['semana','📊','Semana'],['mes','📅','Mês'],['plantoes','🩺','Plantões'],['insights','💡','Insights']];
   document.getElementById('tabbar').innerHTML=tabs.map(t=>
     '<button class="tab'+(tab===t[0]?' on':'')+'" data-tab="'+t[0]+'"><span class="ti">'+t[1]+'</span>'+t[2]+'</button>').join('');
   document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{tab=b.dataset.tab; if(tab==='semana')weekAnchor=view<=todayStr()?view:todayStr(); render();});
@@ -425,7 +536,8 @@ function render(){
   if(tab==='today') renderToday();
   else if(tab==='semana') renderWeek();
   else if(tab==='mes') renderMonth();
-  else renderPlantoes();
+  else if(tab==='plantoes') renderPlantoes();
+  else renderInsights();
   renderTabs();
   window.scrollTo(0,0);
 }
