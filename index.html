@@ -57,6 +57,7 @@
   .habit .info{flex:1; min-width:0;}
   .habit .hname{font-size:16px; font-weight:550;}
   .habit .hnote{font-size:12px; color:var(--muted); margin-top:2px;}
+  .hnote.sf{color:var(--green); font-weight:700;}
   .habit .wk{font-size:11px; color:var(--blue); margin-top:2px;}
   .box{width:30px; height:30px; border-radius:9px; border:2px solid var(--line); flex:none; display:flex; align-items:center; justify-content:center; font-size:18px; color:transparent;}
   .habit.done{background:var(--green-dim);}
@@ -364,8 +365,10 @@ function groupHTML(label,habits,type,checks){
   let out='<div class="group-label">'+label+'</div>';
   habits.forEach(h=>{
     if(h.kind==='cig'){const v=checks[h.id]; const opts=[['none','🟢','Não fumei','g'],['few','🟡','Menos de 5','y'],['many','🔴','5 ou mais','r']];
+      const sf=smokeFreeStreak();
+      const cignote = sf>0 ? '<div class="hnote sf">🔥 '+sf+' dia'+(sf>1?'s':'')+' sem fumar</div>' : '<div class="hnote">menos é melhor — zero é vitória máxima</div>';
       out+='<div class="habit cig"><div class="cig-top"><span class="emo">'+h.emo+'</span><div class="info"><div class="hname">'+h.name+
-        '</div><div class="hnote">menos é melhor — zero é vitória máxima</div></div></div><div class="cig-opts">'+
+        '</div>'+cignote+'</div></div><div class="cig-opts">'+
         opts.map(o=>'<button class="cig-opt '+o[3]+(v===o[0]?' on':'')+'" data-v="'+o[0]+'"><span class="ce">'+o[1]+'</span>'+o[2]+'</button>').join('')+'</div></div>';
       return;}
     const s=statusFor(h,view); const isB=(s==='bonus'||s==='exempt'); const done=checks[h.id]===true;
@@ -521,6 +524,9 @@ function lastNDates(n){const out=[]; for(let i=n-1;i>=0;i--) out.push(shift(toda
 function logged(ds){const c=checksOf(ds); return Object.values(c).some(v=> v===true || v==='none'||v==='few'||v==='many');}
 function bestStreak(){let best=0,cur=0; lastNDates(180).forEach(ds=>{const sc=dayScore(ds); if(sc.total===0)return; if(sc.met===sc.total){cur++; if(cur>best)best=cur;} else cur=0;}); return best;}
 function pc(x){return Math.round(x*100);}
+function smokeFreeStreak(){ let s=todayStr(); if(checksOf(s).cigarro===undefined) s=shift(s,-1); let n=0;
+  for(let i=0;i<400;i++){ if(checksOf(s).cigarro==='none'){ n++; s=shift(s,-1); } else break; } return n; }
+function bestSmokeFree(){ let best=0,cur=0; lastNDates(400).forEach(ds=>{ if(checksOf(ds).cigarro==='none'){cur++; if(cur>best)best=cur;} else cur=0; }); return best; }
 
 function renderInsights(){
   const W=30; const win=lastNDates(W); const lg=win.filter(logged);
@@ -565,12 +571,15 @@ function renderInsights(){
   // breath in por tipo
   const cs=[];
   TYPE_ORDER.forEach(t=>{const ds=lg.filter(x=>typeOf(x)===t && checksOf(x).cigarro); if(ds.length>=3){const g=ds.filter(x=>checksOf(x).cigarro==='none').length; cs.push({t,n:ds.length,green:g/ds.length});}});
-  if(cs.length){
-    h+='<div class="metabox"><div class="ins-head">🍃 Breath in — dias sem fumar</div>';
+  const sfS=smokeFreeStreak(), bfS=bestSmokeFree();
+  if(cs.length || sfS>0 || bfS>0){
+    h+='<div class="metabox"><div class="ins-head">🍃 Breath in</div>';
+    h+='<div class="insub">🔥 Sequência atual sem fumar: <b>'+sfS+' dia'+(sfS===1?'':'s')+'</b>'+(bfS>sfS?' · recorde: <b>'+bfS+'</b>':'')+'.</div>';
     if(cs.length>=2){const srt=[...cs].sort((a,b)=>b.green-a.green); const hi=srt[0], lo=srt[srt.length-1];
       if(hi.green>lo.green) h+='<div class="insub">Você fica <b>sem fumar</b> em '+pc(hi.green)+'% dos dias de <b>'+DAY_TYPES[hi.t].label+'</b>, mas só '+pc(lo.green)+'% em <b>'+DAY_TYPES[lo.t].label+'</b> — esse tipo de dia é seu gatilho.</div>';}
     cs.forEach(s=>{h+='<div class="mrow"><span class="mname" style="width:124px">'+DAY_TYPES[s.t].emoji+' '+DAY_TYPES[s.t].label+'</span><div class="mbar"><i style="width:'+pc(s.green)+'%"></i></div><span class="mval">'+pc(s.green)+'%</span></div>';});
-    h+='<div class="insfoot">% de dias 🟢 (não fumei) entre os dias com Breath in registrado</div></div>';
+    if(cs.length) h+='<div class="insfoot">% de dias 🟢 (não fumei) entre os dias com Breath in registrado</div>';
+    h+='</div>';
   }
 
   // dia da semana
