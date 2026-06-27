@@ -287,19 +287,17 @@ function monthDates(s){const d=parse(s); const y=d.getFullYear(),m=d.getMonth();
 function metaBox(title, dates, monthWeeks){
   let rows='';
   HABITS.forEach(h=>{
-    let done=0, target=0, bonus=0;
+    let done=0, target=0;
     if(h.weekly){ target = monthWeeks ? h.weekly*monthWeeks : h.weekly; done = dates.filter(ds=>checksOf(ds)[h.id]===true).length; }
     else { dates.forEach(ds=>{const s=statusFor(h,ds);
-      if(s==='full'||s==='reduced'){ target++; if(isMet(h,checksOf(ds))) done++; }
-      else if(s==='bonus' && isMet(h,checksOf(ds))) bonus++; }); }
-    if(target===0 && bonus===0) return;
-    const pct = target>0 ? Math.min(100, done/target*100) : 100;
-    const hit = target>0 && done>=target;
-    const main = target>0 ? done+'/'+target : '✓';
-    const badge = bonus>0 ? ' <span class="mbonus">+'+bonus+'</span>' : '';
+      if(s==='full'||s==='reduced') target++;                 // denominador = dias essenciais
+      if(s!=='na' && isMet(h,checksOf(ds))) done++; }); }      // numerador = todos os checks dados
+    if(target===0 && done===0) return;
+    const pct = target>0 ? Math.min(100, done/target*100) : (done>0?100:0);
+    const hit = done>=target && (target>0||done>0);
     rows+='<div class="mrow"><span class="memo">'+h.emo+'</span><span class="mname">'+h.name+'</span>'+
       '<div class="mbar"><i style="width:'+pct+'%"></i></div>'+
-      '<span class="mval'+(hit?' hit':'')+'">'+main+badge+'</span></div>';
+      '<span class="mval'+(hit?' hit':'')+'">'+done+'/'+target+'</span></div>';
   });
   return '<div class="metabox"><div class="metatitle">'+title+'</div>'+rows+'</div>';
 }
