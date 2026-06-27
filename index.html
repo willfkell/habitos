@@ -70,7 +70,7 @@
   .exempt .tag{margin-left:auto; font-size:11px; color:var(--green); border:1px solid var(--green-dim); background:var(--green-dim); padding:3px 8px; border-radius:20px;}
   .cig{flex-direction:column; align-items:stretch; gap:10px;}
   .cig-top{display:flex; align-items:center; gap:13px;}
-  .cig-opts{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
+  .cig-opts{display:grid; grid-template-columns:repeat(2,1fr); gap:8px;}
   .cig-opt{padding:11px 4px; border-radius:11px; background:var(--card2); border:2px solid transparent; text-align:center; font-size:13px; color:var(--muted);}
   .cig-opt .ce{font-size:18px; display:block;}
   .cig-opt.on.g{border-color:var(--green); color:var(--green); background:var(--green-dim);}
@@ -218,8 +218,8 @@ const HABITS = [
      folga:{s:'full',n:'nutritivo em casa'}, p12:{s:'full',n:'arrumar e levar'}, feriado:{s:'bonus',n:'opcional'}, finde:{s:'full',n:'levar comida'}, p36:{s:'exempt'}}},
   {id:'academia',name:'Academia', emo:'🏋️', weekly:3, rules:{
      folga:{s:'full',n:'dia nobre'}, p12:{s:'bonus',n:'se sobrar energia'}, feriado:{s:'bonus',n:'opcional'}, finde:{s:'bonus',n:'se sobrar energia'}, p36:{s:'exempt'}}},
-  {id:'aerobico',name:'Cardio / Bike', emo:'🚲', weekly:3, rules:{
-     folga:{s:'bonus',n:'caminhada'}, p12:{s:'full',n:'ir de bike'}, feriado:{s:'bonus',n:'opcional'}, finde:{s:'bonus',n:'caminhada/bike'}, p36:{s:'exempt'}}},
+  {id:'aerobico',name:'Cardio', emo:'🏃', weekly:3, rules:{
+     folga:{s:'bonus'}, p12:{s:'bonus'}, feriado:{s:'bonus'}, finde:{s:'bonus'}, p36:{s:'exempt'}}},
   {id:'estudar', name:'Estudar', emo:'📚', rules:{
      folga:{s:'full',n:'2 horas'}, p12:{s:'full',n:'30 min'}, feriado:{s:'bonus',n:'opcional'}, finde:{s:'full',n:'30 min'}, p36:{s:'full',n:'30 min'}}},
   {id:'cigarro', name:'Breath in', emo:'🍃', kind:'cig', rules:{
@@ -281,7 +281,7 @@ function statusFor(h,ds){
   return h.rules[typeOf(ds)].s;
 }
 function essentialsOf(ds){return HABITS.filter(h=>['full','reduced'].includes(statusFor(h,ds)));}
-function isMet(h,checks){ if(h.kind==='cig'){const v=checks[h.id]; return v && v!=='many';} return checks[h.id]===true; }
+function isMet(h,checks){ if(h.kind==='cig'){ return checks[h.id]==='none'; } return checks[h.id]===true; }
 function dayScore(s){const checks=checksOf(s); const ess=essentialsOf(s);
   const met=ess.filter(h=>isMet(h,checks)).length; return {met,total:ess.length};}
 function dayComplete(s){const sc=dayScore(s); return sc.total>0 && sc.met===sc.total;}
@@ -365,12 +365,12 @@ function groupHTML(label,habits,type,checks){
   if(!habits.length) return '';
   let out='<div class="group-label">'+label+'</div>';
   habits.forEach(h=>{
-    if(h.kind==='cig'){const v=checks[h.id]; const opts=[['none','🟢','Não fumei','g'],['few','🟡','Menos de 5','y'],['many','🔴','5 ou mais','r']];
+    if(h.kind==='cig'){const v=checks[h.id]; const opts=[['none','🟢','Não fumei','g'],['smoked','🔴','Fumei','r']];
       const sf=smokeFreeStreak();
-      const cignote = sf>0 ? '<div class="hnote sf">🔥 '+sf+' dia'+(sf>1?'s':'')+' sem fumar</div>' : '<div class="hnote">menos é melhor — zero é vitória máxima</div>';
+      const cignote = sf>0 ? '<div class="hnote sf">🔥 '+sf+' dia'+(sf>1?'s':'')+' sem fumar</div>' : '<div class="hnote">não fumar hoje = vitória</div>';
       out+='<div class="habit cig"><div class="cig-top"><span class="emo">'+h.emo+'</span><div class="info"><div class="hname">'+h.name+
         '</div>'+cignote+'</div></div><div class="cig-opts">'+
-        opts.map(o=>'<button class="cig-opt '+o[3]+(v===o[0]?' on':'')+'" data-v="'+o[0]+'"><span class="ce">'+o[1]+'</span>'+o[2]+'</button>').join('')+'</div></div>';
+        opts.map(o=>{const on=(o[0]==='none')?(v==='none'):(v&&v!=='none'); return '<button class="cig-opt '+o[3]+(on?' on':'')+'" data-v="'+o[0]+'"><span class="ce">'+o[1]+'</span>'+o[2]+'</button>';}).join('')+'</div></div>';
       return;}
     const s=statusFor(h,view); const isB=(s==='bonus'||s==='exempt'); const done=checks[h.id]===true;
     const ntxt=s==='exempt'?'isento — marque se conseguir (bônus)':h.rules[type].n;
@@ -468,8 +468,8 @@ function renderMonth(){
   HABITS.forEach(hb=>{
     let val;
     if(hb.kind==='cig'){const g=allDays.filter(ds=>checksOf(ds).cigarro==='none').length;
-      const yv=allDays.filter(ds=>checksOf(ds).cigarro==='few').length; const rv=allDays.filter(ds=>checksOf(ds).cigarro==='many').length;
-      val='🟢'+g+'  🟡'+yv+'  🔴'+rv;}
+      const sm=allDays.filter(ds=>{const c=checksOf(ds).cigarro; return c&&c!=='none';}).length;
+      val='🟢 '+g+' s/ fumar · 🔴 '+sm;}
     else {const c=allDays.filter(ds=>checksOf(ds)[hb.id]===true).length; val=c+(hb.weekly?'x':' dias');}
     h+='<div class="statline"><span><span class="em">'+hb.emo+'</span>'+hb.name+'</span><span class="sv">'+val+'</span></div>';
   });
