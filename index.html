@@ -75,6 +75,26 @@
   .cig-opt.on.g{border-color:var(--green); color:var(--green); background:var(--green-dim);}
   .cig-opt.on.y{border-color:var(--yellow); color:var(--yellow);}
   .cig-opt.on.r{border-color:var(--red); color:var(--red);}
+  /* habit stacking — rotina matinal */
+  .stackcard{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px 16px 12px; margin:12px 0 8px;}
+  .stackcard.done{border-color:var(--green); background:var(--green-dim);}
+  .stackhead{display:flex; justify-content:space-between; align-items:center; font-size:15px; font-weight:700; margin-bottom:4px;}
+  .stackcard.done .stackhead{color:var(--green);}
+  .stackprog{font-size:12px; color:var(--muted); font-weight:600;}
+  .stackprog.done{color:var(--green);}
+  .step{display:flex; align-items:center; gap:12px; padding:9px 0;}
+  .step:active{opacity:.7;}
+  .step .emo{font-size:21px; width:26px; text-align:center;}
+  .step .info{flex:1; min-width:0;}
+  .step .hname{font-size:15px; font-weight:550;}
+  .step.done .hname{color:var(--green);}
+  .step .hnote{font-size:12px; color:var(--muted); margin-top:1px;}
+  .step .box{width:28px; height:28px; border-radius:9px; border:2px solid var(--line); flex:none; display:flex; align-items:center; justify-content:center; font-size:17px; color:transparent;}
+  .step.done .box{background:var(--green); border-color:var(--green); color:#06281d;}
+  .step.bonus .box{border-style:dashed;}
+  .step.done.bonus .box{background:var(--blue); border-color:var(--blue); color:#06223f;}
+  .stepconn{color:var(--faint); font-size:13px; padding-left:9px; line-height:.7; margin:-2px 0;}
+  .stackhint{font-size:11px; color:var(--faint); margin-top:9px; text-align:center;}
   /* week matrix */
   .wgrid{display:grid; grid-template-columns:74px repeat(7,1fr); gap:5px; margin-top:6px;}
   .wgrid .gh{font-size:10px; color:var(--faint); text-align:center; padding-bottom:2px; line-height:1.3;}
@@ -302,9 +322,21 @@ function renderToday(){
      (done?'✅ Dia completo!':sc.met+' de '+sc.total+' essenciais')+'</div><div class="ssub">'+
      (done?'Mandou bem. Recompensa merecida.':'Cada check é uma vitória registrada.')+'</div></div></div>';
 
-  const ess=[],bonus=[],exempt=[];
-  HABITS.forEach(hh=>{const s=statusFor(hh,view); if(s==='na')return; if(s==='exempt')exempt.push(hh); else if(s==='bonus')bonus.push(hh); else ess.push(hh);});
-  h+='<div id="list">'+groupHTML('Hoje',ess,type,checks)+
+  const STACK_IDS=['acordar','along','medit'];
+  const ess=[],bonus=[],exempt=[],stack=[];
+  HABITS.forEach(hh=>{const s=statusFor(hh,view); if(s==='na')return;
+    if(STACK_IDS.includes(hh.id)){ stack.push({h:hh,s:s}); return; }
+    if(s==='exempt')exempt.push(hh); else if(s==='bonus')bonus.push(hh); else ess.push(hh);});
+  stack.sort((a,b)=>STACK_IDS.indexOf(a.h.id)-STACK_IDS.indexOf(b.h.id));
+  let stackHTML='';
+  if(stack.length){
+    const sdone=stack.filter(st=>checks[st.h.id]===true).length, stot=stack.length, sc=(stot>0&&sdone===stot);
+    stackHTML='<div class="stackcard'+(sc?' done':'')+'"><div class="stackhead"><span>🌅 Rotina Matinal</span>'+
+      '<span class="stackprog'+(sc?' done':'')+'">'+(sc?'completa ✓':sdone+'/'+stot)+'</span></div><div class="stacksteps">';
+    stack.forEach((st,i)=>{ stackHTML+=stepHTML(st.h,st.s,checks); if(i<stack.length-1) stackHTML+='<div class="stepconn">↓</div>'; });
+    stackHTML+='</div><div class="stackhint">faça em sequência — um puxa o próximo</div></div>';
+  }
+  h+=stackHTML+'<div id="list">'+(ess.length?groupHTML('Resto do dia',ess,type,checks):'')+
      (bonus.length?groupHTML('Bônus (não conta como falha)',bonus,type,checks):'')+
      (exempt.length?groupHTML('Isento hoje — bônus se você conseguir',exempt,type,checks):'')+
      '</div>';
@@ -340,6 +372,15 @@ function groupHTML(label,habits,type,checks){
       '</span><div class="info"><div class="hname">'+h.name+'</div>'+note+wk+'</div><div class="box">✓</div></div>';
   });
   return out;
+}
+
+function stepHTML(h,s,checks){
+  const done=checks[h.id]===true; const isB=(s==='bonus'||s==='exempt');
+  const n=(h.rules[typeOf(view)]||{}).n;
+  const note = isB ? (n? n+' · bônus':'bônus') : (n||'');
+  return '<div class="step'+(done?' done':'')+(isB?' bonus':'')+'" data-h="'+h.id+'"><span class="emo">'+h.emo+
+    '</span><div class="info"><div class="hname">'+h.name+'</div>'+(note?'<div class="hnote">'+note+'</div>':'')+
+    '</div><div class="box">✓</div></div>';
 }
 
 /* ---------- helpers for matrix/cal cells ---------- */
