@@ -276,8 +276,8 @@ function weekDates(s){const dow=(parse(s).getDay()+6)%7; const mon=shift(s,-dow)
 function weeklyCount(s,hid){return weekDates(s).filter(ds=>checksOf(ds)[hid]===true).length;}
 
 function statusFor(h,ds){
-  if(h.id==='dormir' && shiftOf(ds)==='noturno') return 'na';            // trabalha à noite → não dá pra dormir cedo
-  if(h.id==='acordar' && shiftOf(shift(ds,-1))==='noturno') return 'na'; // noite anterior no hospital → acorda fora do controle
+  if(h.id==='dormir' && (shiftOf(ds)==='noturno'||shiftOf(ds)==='p24')) return 'na';            // trabalha à noite → não dá pra dormir cedo
+  if(h.id==='acordar' && (shiftOf(shift(ds,-1))==='noturno'||shiftOf(shift(ds,-1))==='p24')) return 'na'; // noite anterior no hospital → acorda fora do controle
   return h.rules[typeOf(ds)].s;
 }
 function essentialsOf(ds){return HABITS.filter(h=>['full','reduced'].includes(statusFor(h,ds)));}
