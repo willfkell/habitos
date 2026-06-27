@@ -222,7 +222,7 @@ const HABITS = [
      folga:{s:'bonus'}, p12:{s:'bonus'}, feriado:{s:'bonus'}, finde:{s:'bonus'}, p36:{s:'exempt'}}},
   {id:'estudar', name:'Estudar', emo:'📚', rules:{
      folga:{s:'full',n:'2 horas'}, p12:{s:'full',n:'30 min'}, feriado:{s:'bonus',n:'opcional'}, finde:{s:'full',n:'30 min'}, p36:{s:'full',n:'30 min'}}},
-  {id:'cigarro', name:'Breath in', emo:'🍃', kind:'cig', rules:{
+  {id:'cigarro', name:'Breathe in', emo:'🍃', rules:{
      folga:{s:'full'}, p12:{s:'full'}, feriado:{s:'bonus'}, finde:{s:'full'}, p36:{s:'full'}}},
   {id:'leitura', name:'Leitura (não-médica)', emo:'📖', rules:{
      folga:{s:'full',n:'15 min'}, p12:{s:'bonus',n:'opcional'}, feriado:{s:'bonus',n:'opcional'}, finde:{s:'bonus',n:'opcional'}, p36:{s:'bonus',n:'opcional'}}},
@@ -248,7 +248,8 @@ const SB_KEY='sb_publishable_hblxNPChxt2DoAiFf0-gQg_MDuoARka';
 const sb = (window.supabase && SB_URL) ? window.supabase.createClient(SB_URL, SB_KEY, {auth:{persistSession:true, autoRefreshToken:true}}) : null;
 let authUser=null, pushTimer=null;
 
-function load(){ try{return JSON.parse(localStorage.getItem(KEY))||{days:{}};}catch(e){return {days:{}};} }
+function load(){ let d; try{d=JSON.parse(localStorage.getItem(KEY))||{days:{}};}catch(e){d={days:{}};} return migrateCig(d); }
+function migrateCig(d){ if(d&&d.days) for(const k in d.days){ const c=d.days[k].checks; if(c){ if(c.cigarro==='none') c.cigarro=true; else if(c.cigarro==='few'||c.cigarro==='many'||c.cigarro==='smoked') c.cigarro=false; } } return d; }
 function save(){ localStorage.setItem(KEY, JSON.stringify(data)); if(sb&&authUser) schedulePush(); }
 function pad(n){return String(n).padStart(2,'0');}
 function toStr(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
@@ -281,7 +282,7 @@ function statusFor(h,ds){
   return h.rules[typeOf(ds)].s;
 }
 function essentialsOf(ds){return HABITS.filter(h=>['full','reduced'].includes(statusFor(h,ds)));}
-function isMet(h,checks){ if(h.kind==='cig'){ return checks[h.id]==='none'; } return checks[h.id]===true; }
+function isMet(h,checks){ return checks[h.id]===true; }
 function dayScore(s){const checks=checksOf(s); const ess=essentialsOf(s);
   const met=ess.filter(h=>isMet(h,checks)).length; return {met,total:ess.length};}
 function dayComplete(s){const sc=dayScore(s); return sc.total>0 && sc.met===sc.total;}
@@ -365,16 +366,10 @@ function groupHTML(label,habits,type,checks){
   if(!habits.length) return '';
   let out='<div class="group-label">'+label+'</div>';
   habits.forEach(h=>{
-    if(h.kind==='cig'){const v=checks[h.id]; const opts=[['none','🟢','Não fumei','g'],['smoked','🔴','Fumei','r']];
-      const sf=smokeFreeStreak();
-      const cignote = sf>0 ? '<div class="hnote sf">🔥 '+sf+' dia'+(sf>1?'s':'')+' sem fumar</div>' : '<div class="hnote">não fumar hoje = vitória</div>';
-      out+='<div class="habit cig"><div class="cig-top"><span class="emo">'+h.emo+'</span><div class="info"><div class="hname">'+h.name+
-        '</div>'+cignote+'</div></div><div class="cig-opts">'+
-        opts.map(o=>{const on=(o[0]==='none')?(v==='none'):(v&&v!=='none'); return '<button class="cig-opt '+o[3]+(on?' on':'')+'" data-v="'+o[0]+'"><span class="ce">'+o[1]+'</span>'+o[2]+'</button>';}).join('')+'</div></div>';
-      return;}
     const s=statusFor(h,view); const isB=(s==='bonus'||s==='exempt'); const done=checks[h.id]===true;
-    const ntxt=s==='exempt'?'isento — marque se conseguir (bônus)':h.rules[type].n;
-    const note=ntxt?'<div class="hnote">'+ntxt+'</div>':'';
+    let ntxt=s==='exempt'?'isento — marque se conseguir (bônus)':(h.rules[type]||{}).n; let ncls='hnote';
+    if(h.id==='cigarro'){ const sf=smokeFreeStreak(); if(sf>0){ ntxt='🔥 '+sf+' dia'+(sf>1?'s':'')+' sem fumar'; ncls='hnote sf'; } else ntxt='não fumar hoje = vitória'; }
+    const note=ntxt?'<div class="'+ncls+'">'+ntxt+'</div>':'';
     const wk=h.weekly?'<div class="wk">'+weeklyCount(view,h.id)+'/'+h.weekly+' esta semana</div>':'';
     out+='<div class="habit'+(done?' done':'')+(isB?' bonus':'')+'" data-h="'+h.id+'"><span class="emo">'+h.emo+
       '</span><div class="info"><div class="hname">'+h.name+'</div>'+note+wk+'</div><div class="box">✓</div></div>';
@@ -467,8 +462,8 @@ function renderMonth(){
   const allDays=[]; for(let day=1;day<=dim;day++){const ds=toStr(new Date(y,m,day)); if(ds<=todayStr())allDays.push(ds);}
   HABITS.forEach(hb=>{
     let val;
-    if(hb.kind==='cig'){const g=allDays.filter(ds=>checksOf(ds).cigarro==='none').length;
-      const sm=allDays.filter(ds=>{const c=checksOf(ds).cigarro; return c&&c!=='none';}).length;
+    if(hb.id==='cigarro'){const g=allDays.filter(ds=>checksOf(ds).cigarro===true).length;
+      const sm=allDays.filter(ds=>checksOf(ds).cigarro===false).length;
       val='🟢 '+g+' s/ fumar · 🔴 '+sm;}
     else {const c=allDays.filter(ds=>checksOf(ds)[hb.id]===true).length; val=c+(hb.weekly?'x':' dias');}
     h+='<div class="statline"><span><span class="em">'+hb.emo+'</span>'+hb.name+'</span><span class="sv">'+val+'</span></div>';
@@ -526,8 +521,8 @@ function logged(ds){const c=checksOf(ds); return Object.values(c).some(v=> v===t
 function bestStreak(){let best=0,cur=0; lastNDates(180).forEach(ds=>{const sc=dayScore(ds); if(sc.total===0)return; if(sc.met===sc.total){cur++; if(cur>best)best=cur;} else cur=0;}); return best;}
 function pc(x){return Math.round(x*100);}
 function smokeFreeStreak(){ let s=todayStr(); if(checksOf(s).cigarro===undefined) s=shift(s,-1); let n=0;
-  for(let i=0;i<400;i++){ if(checksOf(s).cigarro==='none'){ n++; s=shift(s,-1); } else break; } return n; }
-function bestSmokeFree(){ let best=0,cur=0; lastNDates(400).forEach(ds=>{ if(checksOf(ds).cigarro==='none'){cur++; if(cur>best)best=cur;} else cur=0; }); return best; }
+  for(let i=0;i<400;i++){ if(checksOf(s).cigarro===true){ n++; s=shift(s,-1); } else break; } return n; }
+function bestSmokeFree(){ let best=0,cur=0; lastNDates(400).forEach(ds=>{ if(checksOf(ds).cigarro===true){cur++; if(cur>best)best=cur;} else cur=0; }); return best; }
 
 function renderInsights(){
   const W=30; const win=lastNDates(W); const lg=win.filter(logged);
@@ -571,7 +566,7 @@ function renderInsights(){
 
   // breath in por tipo
   const cs=[];
-  TYPE_ORDER.forEach(t=>{const ds=lg.filter(x=>typeOf(x)===t && checksOf(x).cigarro); if(ds.length>=3){const g=ds.filter(x=>checksOf(x).cigarro==='none').length; cs.push({t,n:ds.length,green:g/ds.length});}});
+  TYPE_ORDER.forEach(t=>{const ds=lg.filter(x=>typeOf(x)===t && checksOf(x).cigarro!==undefined); if(ds.length>=3){const g=ds.filter(x=>checksOf(x).cigarro===true).length; cs.push({t,n:ds.length,green:g/ds.length});}});
   const sfS=smokeFreeStreak(), bfS=bestSmokeFree();
   if(cs.length || sfS>0 || bfS>0){
     h+='<div class="metabox"><div class="ins-head">🍃 Breath in</div>';
@@ -637,7 +632,7 @@ async function syncPush(){ if(!sb||!authUser) return;
 async function syncPull(){ if(!sb||!authUser) return;
   try{ const {data:row,error}=await sb.from('habit_data').select('data').eq('user_id',authUser.id).maybeSingle(); if(error) throw error;
     const remote=(row&&row.data)?row.data:{days:{},shifts:{}};
-    data=mergeData(remote,data); localStorage.setItem(KEY,JSON.stringify(data));
+    data=migrateCig(mergeData(remote,data)); localStorage.setItem(KEY,JSON.stringify(data));
     await syncPush(); }
   catch(e){ setSync('off'); } }
 function renderLogin(){
