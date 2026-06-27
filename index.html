@@ -155,8 +155,9 @@
   .mname{flex:none; width:86px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--txt);}
   .mbar{flex:1; height:7px; border-radius:5px; background:var(--card2); overflow:hidden;}
   .mbar i{display:block; height:100%; background:var(--green); border-radius:5px;}
-  .mval{flex:none; width:40px; text-align:right; color:var(--muted); font-variant-numeric:tabular-nums;}
+  .mval{flex:none; min-width:40px; text-align:right; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap;}
   .mval.hit{color:var(--green); font-weight:700;}
+  .mbonus{color:var(--blue); font-size:11px; font-weight:600;}
   /* insights */
   .ins-head{font-size:14px; font-weight:700; margin-bottom:6px;}
   .insub{font-size:13px; color:var(--txt); line-height:1.5; margin-bottom:10px;}
@@ -286,14 +287,19 @@ function monthDates(s){const d=parse(s); const y=d.getFullYear(),m=d.getMonth();
 function metaBox(title, dates, monthWeeks){
   let rows='';
   HABITS.forEach(h=>{
-    let done=0, target=0;
+    let done=0, target=0, bonus=0;
     if(h.weekly){ target = monthWeeks ? h.weekly*monthWeeks : h.weekly; done = dates.filter(ds=>checksOf(ds)[h.id]===true).length; }
-    else { dates.forEach(ds=>{const s=statusFor(h,ds); if(s==='full'||s==='reduced'||s==='bonus'){ target++; if(isMet(h,checksOf(ds))) done++; }}); }
-    if(target===0) return;
-    const pct=Math.min(100, done/target*100); const hit=done>=target;
+    else { dates.forEach(ds=>{const s=statusFor(h,ds);
+      if(s==='full'||s==='reduced'){ target++; if(isMet(h,checksOf(ds))) done++; }
+      else if(s==='bonus' && isMet(h,checksOf(ds))) bonus++; }); }
+    if(target===0 && bonus===0) return;
+    const pct = target>0 ? Math.min(100, done/target*100) : 100;
+    const hit = target>0 && done>=target;
+    const main = target>0 ? done+'/'+target : '✓';
+    const badge = bonus>0 ? ' <span class="mbonus">+'+bonus+'</span>' : '';
     rows+='<div class="mrow"><span class="memo">'+h.emo+'</span><span class="mname">'+h.name+'</span>'+
       '<div class="mbar"><i style="width:'+pct+'%"></i></div>'+
-      '<span class="mval'+(hit?' hit':'')+'">'+done+'/'+target+'</span></div>';
+      '<span class="mval'+(hit?' hit':'')+'">'+main+badge+'</span></div>';
   });
   return '<div class="metabox"><div class="metatitle">'+title+'</div>'+rows+'</div>';
 }
