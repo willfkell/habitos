@@ -262,7 +262,7 @@ function defaultTypeRaw(s){const dow=parse(s).getDay(); return (dow===0||dow===6
 function isWkday(s){const d=parse(s).getDay(); return d>=1&&d<=5;}
 function deriveType(s){
   const sh=shiftOf(s), prev=shiftOf(shift(s,-1));
-  if(prev==='noturno' && isWkday(s)) return 'p36';                    // emenda: noturno de ontem + residência hoje
+  if((prev==='noturno'||prev==='p24') && isWkday(s)) return 'p36';    // emenda: noturno OU 24h de ontem + residência hoje
   if(sh==='p24') return 'p36';                                        // plantão 24h corrido (dia+noite emendados)
   if(sh==='noturno') return (isWkday(s)||isWkday(shift(s,1)))?'p36':'finde';
   if(sh==='diurno') return 'finde';
