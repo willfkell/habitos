@@ -144,6 +144,15 @@
   .insrow{display:flex; justify-content:space-between; padding:7px 2px; font-size:14px; border-bottom:1px solid var(--line);}
   .insrow:last-child{border-bottom:none;}
   .insfoot{font-size:11px; color:var(--faint); margin-top:8px;}
+  /* login + sync */
+  .login{display:flex; flex-direction:column; gap:12px; padding:70px 24px 0; max-width:340px; margin:0 auto;}
+  .logintitle{font-size:28px; font-weight:800; text-align:center;}
+  .loginsub{font-size:13px; color:var(--muted); text-align:center; margin-bottom:8px; line-height:1.5;}
+  .login input{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; color:var(--txt); font-size:16px; width:100%;}
+  .loginb{background:var(--green); color:#06281d; border:none; border-radius:12px; padding:14px; font-size:16px; font-weight:700;}
+  .loginb.sec{background:transparent; color:var(--accent); font-weight:500; padding:8px;}
+  .loginmsg{font-size:13px; color:var(--muted); text-align:center; min-height:18px; line-height:1.4;}
+  #syncdot{position:fixed; left:10px; bottom:calc(74px + env(safe-area-inset-bottom)); font-size:10px; color:var(--faint); z-index:40; background:var(--card); padding:3px 9px; border-radius:20px; opacity:.92;}
   /* tab bar */
   .tabbar{position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:560px;
     display:flex; background:rgba(20,22,28,.92); backdrop-filter:blur(12px); border-top:1px solid var(--line);
@@ -159,7 +168,9 @@
 <body>
 <div id="content"></div>
 <div class="tabbar" id="tabbar"></div>
+<div id="syncdot"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* ============================================================
    CONFIG — "Matriz de Hábitos". Auditável e fácil de mexer.
@@ -208,9 +219,14 @@ let view = todayStr();           // dia selecionado (Hoje)
 let weekAnchor = todayStr();     // semana selecionada
 let monthAnchor = todayStr();    // mês selecionado
 let plantoesAnchor = todayStr(); // mês de plantões
+// ---- Supabase (sync entre aparelhos) ----
+const SB_URL='https://lyayjedbntziisaaiths.supabase.co';
+const SB_KEY='sb_publishable_hblxNPChxt2DoAiFf0-gQg_MDuoARka';
+const sb = (window.supabase && SB_URL) ? window.supabase.createClient(SB_URL, SB_KEY, {auth:{persistSession:true, autoRefreshToken:true}}) : null;
+let authUser=null, pushTimer=null;
 
 function load(){ try{return JSON.parse(localStorage.getItem(KEY))||{days:{}};}catch(e){return {days:{}};} }
-function save(){ localStorage.setItem(KEY, JSON.stringify(data)); }
+function save(){ localStorage.setItem(KEY, JSON.stringify(data)); if(sb&&authUser) schedulePush(); }
 function pad(n){return String(n).padStart(2,'0');}
 function toStr(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
 function todayStr(){return toStr(new Date());}
@@ -407,7 +423,7 @@ function renderMonth(){
     else {const c=allDays.filter(ds=>checksOf(ds)[hb.id]===true).length; val=c+(hb.weekly?'x':' dias');}
     h+='<div class="statline"><span><span class="em">'+hb.emo+'</span>'+hb.name+'</span><span class="sv">'+val+'</span></div>';
   });
-  h+='<div class="foot"><button id="export">⤴︎ exportar dados</button><button id="import">⤵︎ importar</button></div>';
+  h+='<div class="foot"><button id="export">⤴︎ exportar</button><button id="import">⤵︎ importar</button><button id="logout">⎋ sair</button></div>';
   document.getElementById('content').innerHTML=h;
 
   byId('mp').onclick=()=>{monthAnchor=toStr(new Date(y,m-1,1));render();};
@@ -416,6 +432,7 @@ function renderMonth(){
   document.querySelectorAll('.cd[data-day]').forEach(el=>el.onclick=()=>{if(el.dataset.day<=todayStr()){view=el.dataset.day;tab='today';render();}});
   byId('export').onclick=async()=>{const t=JSON.stringify(data); try{await navigator.clipboard.writeText(t);alert('Dados copiados — cole num lugar seguro pra backup.');}catch(e){prompt('Copie seus dados (backup):',t);}};
   byId('import').onclick=()=>{const t=prompt('Cole o backup (JSON):'); if(!t)return; try{const o=JSON.parse(t); if(o&&o.days){data=o;save();render();alert('Importado!');}else alert('Formato inválido.');}catch(e){alert('Não consegui ler.');}};
+  const _lo=byId('logout'); if(_lo) _lo.onclick=async()=>{ if(sb){try{await sb.auth.signOut();}catch(e){}} authUser=null; renderLogin(); };
 }
 
 /* ---------- PLANTÕES (planejamento + fonte de classificação) ---------- */
@@ -541,7 +558,70 @@ function render(){
   renderTabs();
   window.scrollTo(0,0);
 }
-render();
+
+/* ---------- AUTH + SYNC (Supabase) ---------- */
+function setSync(st){ const el=byId('syncdot'); if(!el) return;
+  if(st==='ok'){ el.textContent='✓ sincronizado'; el.style.color='var(--green)'; }
+  else if(st==='saving'){ el.textContent='… salvando'; el.style.color='var(--muted)'; }
+  else if(st==='off'){ el.textContent='⚠︎ offline'; el.style.color='var(--yellow)'; }
+  else { el.textContent=''; } }
+function mergeData(a,b){
+  const out={days:{},shifts:{}}; const ad=(a&&a.days)||{}, bd=(b&&b.days)||{};
+  new Set([...Object.keys(ad),...Object.keys(bd)]).forEach(k=>{
+    const ac=(ad[k]&&ad[k].checks)||{}, bc=(bd[k]&&bd[k].checks)||{};
+    const m={checks:Object.assign({},ac,bc)};
+    const ut=(bd[k]&&bd[k].userType)||(ad[k]&&ad[k].userType); if(ut) m.userType=ut;
+    out.days[k]=m; });
+  out.shifts=Object.assign({},(a&&a.shifts)||{},(b&&b.shifts)||{});
+  return out; }
+function schedulePush(){ setSync('saving'); clearTimeout(pushTimer); pushTimer=setTimeout(syncPush,800); }
+async function syncPush(){ if(!sb||!authUser) return;
+  try{ const {error}=await sb.from('habit_data').upsert({user_id:authUser.id, data:data, updated_at:new Date().toISOString()}); if(error) throw error; setSync('ok'); }
+  catch(e){ setSync('off'); } }
+async function syncPull(){ if(!sb||!authUser) return;
+  try{ const {data:row,error}=await sb.from('habit_data').select('data').eq('user_id',authUser.id).maybeSingle(); if(error) throw error;
+    const remote=(row&&row.data)?row.data:{days:{},shifts:{}};
+    data=mergeData(remote,data); localStorage.setItem(KEY,JSON.stringify(data));
+    await syncPush(); }
+  catch(e){ setSync('off'); } }
+function renderLogin(){
+  const tb=byId('tabbar'); if(tb) tb.innerHTML=''; const sd=byId('syncdot'); if(sd) sd.textContent='';
+  byId('content').innerHTML=
+    '<div class="login"><div class="logintitle">Hábitos</div>'+
+    '<div class="loginsub">Entre pra sincronizar entre o celular e o notebook.</div>'+
+    '<input id="email" type="email" placeholder="seu e-mail" autocomplete="username" autocapitalize="none" autocorrect="off">'+
+    '<input id="pass" type="password" placeholder="senha (mín. 6 caracteres)" autocomplete="current-password">'+
+    '<button id="loginbtn" class="loginb">Entrar</button>'+
+    '<button id="signupbtn" class="loginb sec">Primeira vez? Criar conta</button>'+
+    '<div id="loginmsg" class="loginmsg"></div></div>';
+  byId('loginbtn').onclick=()=>doAuth('in');
+  byId('signupbtn').onclick=()=>doAuth('up'); }
+async function doAuth(mode){
+  const email=(byId('email').value||'').trim(), pass=byId('pass').value||''; const msg=byId('loginmsg');
+  if(!email||!pass){ msg.style.color='var(--yellow)'; msg.textContent='Preencha e-mail e senha.'; return; }
+  if(pass.length<6){ msg.style.color='var(--yellow)'; msg.textContent='A senha precisa de ao menos 6 caracteres.'; return; }
+  msg.style.color='var(--muted)'; msg.textContent='Conectando…';
+  try{
+    const r = mode==='up' ? await sb.auth.signUp({email,password:pass}) : await sb.auth.signInWithPassword({email,password:pass});
+    if(r.error) throw r.error;
+    authUser = r.data.user; if(!authUser){ const s=await sb.auth.getSession(); authUser=s.data.session?s.data.session.user:null; }
+    if(!authUser){ msg.style.color='var(--yellow)'; msg.textContent='Conta criada — se pediu confirmação por e-mail, desligue "Confirm email" no Supabase e tente Entrar.'; return; }
+    await syncPull(); render();
+  }catch(e){ msg.style.color='var(--yellow)'; msg.textContent=traduzErro((e&&e.message)||''); } }
+function traduzErro(m){
+  if(/Invalid login/i.test(m)) return 'E-mail ou senha incorretos — se é sua 1ª vez, toque em "Criar conta".';
+  if(/already registered|already exists|User already/i.test(m)) return 'Essa conta já existe — toque em "Entrar".';
+  if(/rate|too many/i.test(m)) return 'Muitas tentativas seguidas, espere um minuto.';
+  if(/Failed to fetch|NetworkError/i.test(m)) return 'Sem internet ou chave inválida. Tente de novo online.';
+  return m||'Algo deu errado, tente de novo.'; }
+async function boot(){
+  if(!sb){ render(); return; }
+  try{ const {data:{session}}=await sb.auth.getSession(); authUser=session?session.user:null; }catch(e){ authUser=null; }
+  if(!authUser){ renderLogin(); return; }
+  await syncPull(); render(); }
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && sb && authUser){ syncPull().then(()=>render()); } });
+window.addEventListener('online',()=>{ if(sb&&authUser) syncPush(); });
+boot();
 </script>
 </body>
 </html>
