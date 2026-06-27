@@ -263,6 +263,7 @@ function isWkday(s){const d=parse(s).getDay(); return d>=1&&d<=5;}
 function deriveType(s){
   const sh=shiftOf(s), prev=shiftOf(shift(s,-1));
   if(prev==='noturno' && isWkday(s)) return 'p36';                    // emenda: noturno de ontem + residência hoje
+  if(sh==='p24') return 'p36';                                        // plantão 24h corrido (dia+noite emendados)
   if(sh==='noturno') return (isWkday(s)||isWkday(shift(s,1)))?'p36':'finde';
   if(sh==='diurno') return 'finde';
   return defaultTypeRaw(s);
@@ -491,22 +492,22 @@ function renderPlantoes(){
   let h='<div class="navbar"><button class="nav" id="pp">‹</button><div class="nlabel"><div class="d1">Plantões</div>'+
     '<div class="d2">'+MOF[m]+' '+y+'</div>'+(isThis?'':'<button class="jump" id="pj">↩︎ mês atual</button>')+
     '</div><button class="nav" id="pn">›</button></div>';
-  h+='<div class="plegend">☀️ diurno · 🌙 noturno · 🔥 vira 24-36h (emenda) · toque num dia pra alternar</div>';
+  h+='<div class="plegend">☀️ diurno · 🌙 noturno · 24h dia+noite · 🔥 emenda · toque pra alternar</div>';
   h+='<div class="pcal">'+WDH.map(w=>'<div class="ch">'+w+'</div>').join('');
   const firstStr=toStr(new Date(y,m,1)); const lead=(parse(firstStr).getDay()+6)%7;
   for(let i=0;i<lead;i++) h+='<div class="pcell blank"></div>';
-  const dim=new Date(y,m+1,0).getDate(); let nd=0,nn=0;
+  const dim=new Date(y,m+1,0).getDate(); let nd=0,nn=0,n24=0;
   for(let day=1;day<=dim;day++){const ds=toStr(new Date(y,m,day)); const sh=shiftOf(ds); const t=typeOf(ds);
-    if(sh==='diurno')nd++; if(sh==='noturno')nn++;
+    if(sh==='diurno')nd++; if(sh==='noturno')nn++; if(sh==='p24')n24++;
     let cls='pcell'; if(t==='p36')cls+=' t36'; else if(t==='finde')cls+=' tfinde'; else if(t==='folga')cls+=' tfolga';
     if(ds===todayStr())cls+=' today';
-    const mk = sh==='diurno'?'☀️': sh==='noturno'?'🌙': (t==='p36'?'🔥':'');
+    const mk = sh==='diurno'?'☀️': sh==='noturno'?'🌙': sh==='p24'?'24h': (t==='p36'?'🔥':'');
     h+='<div class="'+cls+'" data-pd="'+ds+'"><div class="pnum">'+day+'</div><div class="mk">'+mk+'</div></div>';
   }
   h+='</div>';
   h+='<div class="summary" style="margin-top:14px"><div class="stxt"><div class="stitle">'+(nd+nn)+' plantões em '+MOF[m]+'</div>'+
-     '<div class="ssub">'+nd+' diurno(s) · '+nn+' noturno(s)</div></div></div>';
-  h+='<div class="hint">Cada toque alterna: nenhum → ☀️ diurno → 🌙 noturno → nenhum.<br>O tipo de cada dia (e a emenda do 24-36h) é calculado sozinho a partir daqui.</div>';
+     '<div class="ssub">'+nd+' diurno(s) · '+nn+' noturno(s) · '+n24+' de 24h</div></div></div>';
+  h+='<div class="hint">Cada toque alterna: nenhum → ☀️ diurno → 🌙 noturno → 24h → nenhum.<br>O tipo de cada dia (e a emenda do 24-36h) é calculado sozinho a partir daqui.</div>';
   document.getElementById('content').innerHTML=h;
 
   byId('pp').onclick=()=>{plantoesAnchor=toStr(new Date(y,m-1,1));render();};
@@ -514,7 +515,7 @@ function renderPlantoes(){
   const pj=byId('pj'); if(pj) pj.onclick=()=>{plantoesAnchor=todayStr();render();};
   document.querySelectorAll('.pcell[data-pd]').forEach(el=>el.onclick=()=>{
     const ds=el.dataset.pd; const cur=shiftOf(ds);
-    const next = !cur ? 'diurno' : cur==='diurno' ? 'noturno' : null;
+    const next = !cur ? 'diurno' : cur==='diurno' ? 'noturno' : cur==='noturno' ? 'p24' : null;
     setShift(ds,next); render();
   });
 }
